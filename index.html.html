@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turnos Dr. Becerra</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f9f9f9; padding: 20px; }
+    h1 { text-align: center; }
+    .calendar { display: flex; flex-wrap: wrap; max-width: 400px; margin: auto; gap: 10px; }
+    .day {
+      width: 80px;
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .available { background-color: #add8e6; }
+    .unavailable { background-color: #ccc; cursor: not-allowed; }
+    form { max-width: 400px; margin: auto; display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+    label { font-weight: bold; }
+    select, input { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+    button { padding: 10px; background-color: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background-color: #0056b3; }
+  </style>
+</head>
+<body>
+  <h1>Turnos Dr. Becerra</h1>
+  <div id="calendar" class="calendar"></div>
+
+  <form id="turnoForm">
+    <label>Nombre:</label>
+    <input type="text" name="nombre" required>
+
+    <label>Apellido:</label>
+    <input type="text" name="apellido" required>
+
+    <label>Obra social:</label>
+    <select name="obraSocial" required>
+      <option value="">Seleccionar</option>
+      <option value="IOMA">IOMA</option>
+      <option value="PAMI">PAMI</option>
+      <option value="Particular">Particular</option>
+    </select>
+
+    <label>¿Primera vez?</label>
+    <select name="primeraVez" required>
+      <option value="">Seleccionar</option>
+      <option value="Sí">Sí</option>
+      <option value="No">No</option>
+    </select>
+
+    <label>Teléfono:</label>
+    <input type="tel" name="wpp" required>
+
+    <label>Email (opcional):</label>
+    <input type="email" name="email">
+
+    <label>Fecha seleccionada:</label>
+    <input type="text" name="fecha" id="fechaSeleccionada" readonly required>
+
+    <label>Horario:</label>
+    <select name="horario" id="horario" required></select>
+
+    <button type="submit">Solicitar turno</button>
+  </form>
+
+  <script>
+    const endpoint = "https://script.google.com/macros/s/AKfycbyD8RZckZ7xodsGy6Y_tsqPWabxLcApDlDSqUfj5eCbQqjy-4jCmxNF-S6IQkCfVPefYg/exec";
+    const calendario = document.getElementById('calendar');
+    const fechaInput = document.getElementById('fechaSeleccionada');
+    const horarioSelect = document.getElementById('horario');
+
+    const horarios = ["15:00", "15:20", "15:40", "16:00", "16:20", "16:40", "17:00", "17:20", "17:40", "18:00"];
+
+    function obtenerFechasDisponibles(turnos) {
+      const disponibles = {};
+      for (let i = 0; i < 21; i++) {
+        const fecha = new Date();
+        fecha.setDate(fecha.getDate() + i);
+        const dia = fecha.getDay();
+        if (dia === 2 || dia === 4) {
+          const fechaStr = fecha.toISOString().split('T')[0];
+          const cantidad = turnos.filter(t => t.fecha === fechaStr).length;
+          disponibles[fechaStr] = cantidad < 10;
+        }
+      }
+      return disponibles;
+    }
+
+    async function cargarCalendario() {
+      const res = await fetch(endpoint);
+      const data = await res.json();
+      const turnos = data.turnos || [];
+      const disponibilidad = obtenerFechasDisponibles(turnos);
+
+      calendario.innerHTML = '';
+      for (const fecha in disponibilidad) {
+        const dia = document.createElement('div');
+        dia.className = 'day ' + (disponibilidad[fecha] ? 'available' : 'unavailable');
+        dia.textContent = fecha.slice(5);
+        if (disponibilidad[fecha]) {
+          dia.onclick = () => seleccionarFecha(fecha, turnos);
+        }
+        calendario.appendChild(dia);
+      }
+    }
+
+    function seleccionarFecha(fecha, turnos) {
+      fechaInput.value = fecha;
+      const ocupados = turnos.filter(t => t.fecha === fecha).map(t => t.horario);
+      horarioSelect.innerHTML = '';
+      horarios.forEach(h => {
+        if (!ocupados.includes(h)) {
+          const opt = document.createElement('option');
+          opt.value = h;
+          opt.textContent = h;
+          horarioSelect.appendChild(opt);
+        }
+      });
+    }
+
+    document.getElementById('turnoForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const datos = Object.fromEntries(new FormData(this).entries());
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(datos),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const resultado = await res.json();
+      if (resultado.success) {
+        alert("Turno solicitado con éxito.");
+        this.reset();
+        cargarCalendario();
+      } else {
+        alert("Error: " + resultado.error);
+      }
+    });
+
+    cargarCalendario();
+  </script>
+</body>
+</html>
